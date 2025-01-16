@@ -5,19 +5,19 @@ import time
 import matplotlib.pyplot as plt
 
 # OpenWeatherMap API configuration
-API_KEY = "your_openweathermap_api_key"  # Replace with your actual API key
+API_KEY = "6df70105503dc3b48152c4ad23a17a52"
 BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
 
 # MySQL database configuration
 DB_CONFIG = {
     "host": "localhost",
-    "user": "weather_user",  # Replace with your MySQL username
-    "password": "your_password",  # Replace with your MySQL password
-    "database": "weather_db"  # Replace with your database name
+    "user": "mayank",
+    "password": "mvyas", 
+    "database": "weather_db"  
 }
 
 def initialize_database():
-    """Ensure the database table for storing weather data is ready."""
+    
     try:
         connection = mysql.connector.connect(**DB_CONFIG)
         cursor = connection.cursor()
