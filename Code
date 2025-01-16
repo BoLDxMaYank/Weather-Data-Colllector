@@ -1,0 +1,148 @@
+import requests
+import mysql.connector
+from datetime import datetime
+import time
+import matplotlib.pyplot as plt
+
+# OpenWeatherMap API configuration
+API_KEY = "your_openweathermap_api_key"  # Replace with your actual API key
+BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
+
+# MySQL database configuration
+DB_CONFIG = {
+    "host": "localhost",
+    "user": "weather_user",  # Replace with your MySQL username
+    "password": "your_password",  # Replace with your MySQL password
+    "database": "weather_db"  # Replace with your database name
+}
+
+def initialize_database():
+    """Ensure the database table for storing weather data is ready."""
+    try:
+        connection = mysql.connector.connect(**DB_CONFIG)
+        cursor = connection.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS weather_data (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                city VARCHAR(100),
+                temperature FLOAT,
+                humidity INT,
+                weather_description VARCHAR(255),
+                timestamp DATETIME
+            )
+        """)
+        connection.commit()
+    except mysql.connector.Error as err:
+        print(f"Database error: {err}")
+    finally:
+        if connection.is_connected():
+            connection.close()
+
+def fetch_weather(city):
+    """Retrieve the current weather for a specific city from the API."""
+    params = {
+        "q": city,
+        "appid": API_KEY,
+        "units": "metric"  # Temperature in Celsius
+    }
+    try:
+        response = requests.get(BASE_URL, params=params)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Failed to fetch weather for {city}: {e}")
+        return None
+
+def save_weather_to_db(city, weather_data):
+    """Insert fetched weather data into the database."""
+    try:
+        connection = mysql.connector.connect(**DB_CONFIG)
+        cursor = connection.cursor()
+        query = """
+            INSERT INTO weather_data (city, temperature, humidity, weather_description, timestamp)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        values = (
+            city,
+            weather_data["main"]["temp"],
+            weather_data["main"]["humidity"],
+            weather_data["weather"][0]["description"],
+            datetime.now()
+        )
+        cursor.execute(query, values)
+        connection.commit()
+    except mysql.connector.Error as err:
+        print(f"Error saving weather data: {err}")
+    finally:
+        if connection.is_connected():
+            connection.close()
+
+def collect_weather_data(cities):
+    """Fetch and store weather data for a list of cities."""
+    for city in cities:
+        print(f"Getting weather data for {city}...")
+        weather_data = fetch_weather(city)
+        if weather_data:
+            save_weather_to_db(city, weather_data)
+            print(f"Weather data for {city} saved.")
+        else:
+            print(f"Skipping {city} due to an error.")
+
+def plot_temperature_trends(city):
+    """Generate a temperature trend graph for a city using database records."""
+    try:
+        connection = mysql.connector.connect(**DB_CONFIG)
+        cursor = connection.cursor()
+        query = """
+            SELECT timestamp, temperature FROM weather_data
+            WHERE city = %s
+            ORDER BY timestamp ASC
+        """
+        cursor.execute(query, (city,))
+        results = cursor.fetchall()
+    except mysql.connector.Error as err:
+        print(f"Error fetching data for plotting: {err}")
+        return
+    finally:
+        if connection.is_connected():
+            connection.close()
+
+    if not results:
+        print(f"No temperature data available for {city}.")
+        return
+
+    timestamps, temperatures = zip(*results)
+    plt.figure(figsize=(10, 5))
+    plt.plot(timestamps, temperatures, marker='o', linestyle='-')
+    plt.title(f"Temperature Trends in {city}")
+    plt.xlabel("Time")
+    plt.ylabel("Temperature (°C)")
+    plt.grid(True)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    """Main program loop to fetch, store, and visualize weather data."""
+    cities = ["London", "New York", "Delhi", "Tokyo", "Sydney"]
+
+    # Ensure database table is ready
+    initialize_database()
+
+    try:
+        while True:
+            print("\nStarting weather data collection...")
+            collect_weather_data(cities)
+            print("Data collection complete. Next update in 1 hour.")
+
+            # Show trends for the first city in the list
+            if cities:
+                plot_temperature_trends(cities[0])
+
+            # Wait for an hour before the next update
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        print("Stopping weather data collection. Goodbye!")
+
+if __name__ == "__main__":
+    main()
